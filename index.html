@@ -3,143 +3,164 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>文字穿越特效 App</title>
+    <title>專業級文字穿越 App</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <style>
-        #canvas-container { touch-action: none; overflow: hidden; position: relative; }
-        .controls { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(5px); }
+        body { touch-action: none; -webkit-user-select: none; }
+        .canvas-container { margin: 0 auto; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        .mode-active { border: 2px solid #3b82f6; background-color: #eff6ff; }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col">
+<body class="bg-slate-900 min-h-screen text-slate-100 font-sans">
 
-    <header class="p-4 bg-blue-600 text-white text-center font-bold shadow-lg">
-        人像文字穿越工具 (手機優化版)
+    <header class="p-4 flex justify-between items-center bg-slate-800 border-b border-slate-700">
+        <h1 class="text-lg font-bold">文字遮罩編輯器</h1>
+        <button id="saveBtn" class="bg-green-600 px-4 py-1 rounded-full text-sm font-medium">儲存匯出</button>
     </header>
 
-    <main class="flex-1 flex flex-col items-center p-4">
-        <div id="canvas-container" class="w-full aspect-square bg-white shadow-inner rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center relative">
-            <canvas id="mainCanvas" class="max-w-full max-h-full"></canvas>
-            <div id="loading" class="hidden absolute inset-0 bg-black/50 text-white flex items-center justify-center">AI 辨識中...</div>
+    <main class="p-4 space-y-4">
+        <div id="wrapper" class="relative flex justify-center">
+            <canvas id="c"></canvas>
+            <div id="loader" class="hidden absolute inset-0 bg-black/60 flex flex-col items-center justify-center rounded-xl">
+                <div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mb-2"></div>
+                <p>正在處理圖層...</p>
+            </div>
         </div>
 
-        <div class="controls w-full mt-4 p-4 rounded-xl shadow-md space-y-4">
-            <input type="file" id="upload" accept="image/*" class="w-full p-2 border rounded">
-            
-            <div class="flex gap-2">
-                <input type="text" id="textInput" placeholder="輸入文字" class="flex-1 p-2 border rounded">
-                <input type="color" id="colorPicker" value="#ffffff" class="w-12 h-10 border rounded">
-            </div>
+        <div class="grid grid-cols-2 gap-3">
+            <label class="flex flex-col items-center justify-center p-3 bg-slate-800 rounded-xl border border-slate-700 active:scale-95 transition">
+                <span class="text-xs mb-1">1. 上傳照片</span>
+                <input type="file" id="imgUpload" accept="image/*" class="hidden">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor font-bold"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+            </label>
+            <label class="flex flex-col items-center justify-center p-3 bg-slate-800 rounded-xl border border-slate-700 active:scale-95 transition">
+                <span class="text-xs mb-1">2. 上傳文字圖</span>
+                <input type="file" id="textImgUpload" accept="image/*" class="hidden">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            </label>
+        </div>
 
-            <div class="text-sm text-gray-500 text-center">
-                💡 操作提示：單指移動文字，雙指縮放圖片
-            </div>
-            
-            <button id="download" class="w-full bg-green-500 text-white py-3 rounded-lg font-bold">儲存圖片</button>
+        <div class="flex items-center justify-around bg-slate-800 p-2 rounded-2xl border border-slate-700">
+            <button id="moveMode" class="flex flex-col items-center p-2 rounded-lg mode-active w-full">
+                <span class="text-xs">移動縮放</span>
+            </button>
+            <button id="maskMode" class="flex flex-col items-center p-2 rounded-lg w-full">
+                <span class="text-xs text-red-400 font-bold">塗抹邊界</span>
+            </button>
+        </div>
+
+        <div id="maskControls" class="hidden space-y-2">
+            <p class="text-[10px] text-slate-400 text-center uppercase tracking-widest">塗抹工具 (筆刷大小)</p>
+            <input type="range" id="brushSize" min="5" max="100" value="30" class="w-full">
         </div>
     </main>
 
     <script>
-        const canvas = document.getElementById('mainCanvas');
-        const ctx = canvas.getContext('2d');
-        const upload = document.getElementById('upload');
-        const textInput = document.getElementById('textInput');
-        const colorPicker = document.getElementById('colorPicker');
-        const loading = document.getElementById('loading');
+        const canvas = new fabric.Canvas('c', {
+            isDrawingMode: false,
+            width: window.innerWidth - 40,
+            height: window.innerWidth - 40,
+            backgroundColor: '#1e293b'
+        });
 
-        let img = new Image();
-        let foregroundImg = null;
-        let textX = 100, textY = 100;
-        let scale = 1, lastScale = 1;
-        let text = "Hello";
+        let bgImage, textImage;
 
-        // 載入 BodyPix 模型用於去背
-        async function loadModel() {
-            const net = await bodyPix.load();
-            return net;
-        }
-
-        upload.addEventListener('change', async (e) => {
+        // 1. 照片上傳
+        document.getElementById('imgUpload').onchange = function(e) {
             const file = e.target.files[0];
-            if (!file) return;
-
-            loading.classList.remove('hidden');
             const reader = new FileReader();
-            reader.onload = (event) => {
-                img.onload = async () => {
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    
-                    // AI 進行人像分割
-                    const net = await loadModel();
-                    const segmentation = await net.segmentPerson(img);
-                    
-                    // 建立前景圖層 (人像)
-                    const fgCanvas = document.createElement('canvas');
-                    fgCanvas.width = img.width;
-                    fgCanvas.height = img.height;
-                    const fgCtx = fgCanvas.getContext('2d');
-                    
-                    fgCtx.drawImage(img, 0, 0);
-                    const imageData = fgCtx.getImageData(0, 0, img.width, img.height);
-                    for (let i = 0; i < segmentation.data.length; i++) {
-                        if (segmentation.data[i] === 0) { // 如果是背景，設為透明
-                            imageData.data[i * 4 + 3] = 0;
-                        }
-                    }
-                    fgCtx.putImageData(imageData, 0, 0);
-                    foregroundImg = fgCanvas;
-                    
-                    loading.classList.add('hidden');
-                    draw();
-                };
-                img.src = event.target.result;
+            reader.onload = function(f) {
+                fabric.Image.fromURL(f.target.result, function(img) {
+                    const scale = (window.innerWidth - 40) / img.width;
+                    img.set({ scaleX: scale, scaleY: scale, selectable: false, evented: false });
+                    canvas.clear();
+                    canvas.add(img);
+                    canvas.sendToBack(img);
+                    bgImage = img;
+                    canvas.renderAll();
+                });
             };
             reader.readAsDataURL(file);
-        });
+        };
 
-        function draw() {
-            if (!img.src) return;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // 2. 文字/圖形上傳 (關鍵需求：可旋轉縮放)
+        document.getElementById('textImgUpload').onchange = function(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(f) {
+                fabric.Image.fromURL(f.target.result, function(img) {
+                    img.set({
+                        left: 50, top: 50,
+                        scaleX: 0.5, scaleY: 0.5,
+                        cornerColor: '#3b82f6',
+                        cornerSize: 24, // 手機好抓取
+                        transparentCorners: false
+                    });
+                    canvas.add(img);
+                    textImage = img;
+                    canvas.setActiveObject(img);
+                    canvas.renderAll();
+                });
+            };
+            reader.readAsDataURL(file);
+        };
+
+        // 3. 模式切換：移動 vs 遮罩塗抹
+        const moveBtn = document.getElementById('moveMode');
+        const maskBtn = document.getElementById('maskMode');
+        const maskControls = document.getElementById('maskControls');
+
+        moveBtn.onclick = () => {
+            canvas.isDrawingMode = false;
+            moveBtn.classList.add('mode-active');
+            maskBtn.classList.remove('mode-active');
+            maskControls.classList.add('hidden');
+            if(textImage) textImage.selectable = true;
+        };
+
+        maskBtn.onclick = () => {
+            if(!textImage) return alert('請先上傳文字圖！');
             
-            // 1. 底層：原始照片
-            ctx.drawImage(img, 0, 0);
+            // 進入 Snapseed 塗抹模式邏輯
+            canvas.isDrawingMode = true;
+            canvas.freeDrawingBrush = new fabric.EraserBrush(canvas); // 需要額外外掛，這裡先用 Destination-out 模擬
+            canvas.freeDrawingBrush.width = parseInt(document.getElementById('brushSize').value, 10);
+            canvas.freeDrawingBrush.color = 'white';
+            
+            // 這裡的核心：讓畫筆作用在文字層上
+            textImage.globalCompositeOperation = 'destination-out'; 
+            
+            moveBtn.classList.remove('mode-active');
+            maskBtn.classList.add('mode-active');
+            maskControls.classList.remove('hidden');
+            textImage.selectable = false;
+        };
 
-            // 2. 中層：文字
-            ctx.fillStyle = colorPicker.value;
-            ctx.font = `bold ${canvas.width / 10}px Arial`;
-            ctx.fillText(text, textX, textY);
+        document.getElementById('brushSize').oninput = function() {
+            if(canvas.freeDrawingBrush) canvas.freeDrawingBrush.width = parseInt(this.value, 10);
+        };
 
-            // 3. 頂層：去背人像
-            if (foregroundImg) {
-                ctx.drawImage(foregroundImg, 0, 0);
-            }
-        }
-
-        textInput.addEventListener('input', (e) => {
-            text = e.target.value;
-            draw();
-        });
-
-        colorPicker.addEventListener('input', draw);
-
-        // 簡易拖拽與縮放邏輯 (手機 Touch 支援)
-        canvas.addEventListener('touchmove', (e) => {
-            if (e.touches.length === 1) {
-                const rect = canvas.getBoundingClientRect();
-                textX = (e.touches[0].clientX - rect.left) * (canvas.width / rect.width);
-                textY = (e.touches[0].clientY - rect.top) * (canvas.height / rect.height);
-                draw();
-            }
-        });
-
-        document.getElementById('download').onclick = () => {
+        // 4. 儲存
+        document.getElementById('saveBtn').onclick = () => {
+            const dataURL = canvas.toDataURL({ format: 'png', quality: 1 });
             const link = document.createElement('a');
-            link.download = 'edited-photo.png';
-            link.href = canvas.toDataURL();
+            link.download = 'snapseed-style-edit.png';
+            link.href = dataURL;
             link.click();
         };
+
+        // 支援雙指縮放畫布 (方便精細塗抹)
+        canvas.on('mouse:wheel', function(opt) {
+            var delta = opt.e.deltaY;
+            var zoom = canvas.getZoom();
+            zoom *= 0.999 ** delta;
+            if (zoom > 20) zoom = 20;
+            if (zoom < 0.01) zoom = 0.01;
+            canvas.setZoom(zoom);
+            opt.e.preventDefault();
+            opt.e.stopPropagation();
+        });
     </script>
 </body>
 </html>
