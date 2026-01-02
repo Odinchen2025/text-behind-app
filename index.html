@@ -3,643 +3,215 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pro Text Mask Editor</title>
+    <title>Text Behind Image Tool</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;900&family=Roboto:wght@400;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;900&display=swap" rel="stylesheet">
     <style>
-        body { background-color: #121212; color: white; touch-action: none; overflow: hidden; font-family: 'Roboto', 'Noto Sans TC', sans-serif; }
-        #canvas-wrapper { 
-            position: relative; 
-            width: 100vw; 
-            height: 60vh; 
-            background: #1e1e1e;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            overflow: hidden;
+        /* 禁止網頁預設縮放，將手勢留給畫布 */
+        body { background-color: #000; color: white; touch-action: none; overflow: hidden; font-family: 'Noto Sans TC', sans-serif; }
+        #canvas-area { 
+            position: relative; width: 100vw; height: 55vh; 
+            background: #111; display: flex; justify-content: center; align-items: center; overflow: hidden;
         }
-        .tool-panel { height: 40vh; background: #2c2c2c; display: flex; flex-direction: column; }
-        .tab-btn { flex: 1; padding: 15px; text-align: center; color: #aaa; border-bottom: 2px solid transparent; font-size: 14px;}
-        .tab-btn.active { color: #4facfe; border-bottom: 2px solid #4facfe; font-weight: bold; }
-        .control-row { display: flex; align-items: center; gap: 10px; padding: 10px 20px; }
-        input[type="range"] { flex: 1; accent-color: #4facfe; }
-        .color-swatch { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #fff; cursor: pointer; }
+        .controls { height: 45vh; background: #222; display: flex; flex-direction: column; padding-bottom: 20px;}
+        
+        /* 自定義滑桿 */
+        input[type=range] { -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #3b82f6; margin-top: -8px; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #4b5563; border-radius: 2px; }
     </style>
 </head>
 <body class="flex flex-col h-screen">
 
-    <header class="h-12 flex justify-between items-center px-4 bg-gray-900 border-b border-gray-800 z-10">
-        <div class="text-sm font-bold text-gray-400">TEXT MASK PRO</div>
-        <div class="flex gap-3">
-            <label class="cursor-pointer bg-gray-700 px-3 py-1 rounded text-xs">
-                📸 上傳
-                <input type="file" id="upload-input" accept="image/*" class="hidden">
+    <div class="flex justify-between items-center p-3 bg-gray-900 border-b border-gray-800 z-50">
+        <span class="font-bold text-gray-400 text-sm">TEXT MASK v2</span>
+        <div class="flex gap-2">
+            <label class="bg-gray-700 px-3 py-1.5 rounded text-xs font-bold active:scale-95 transition cursor-pointer">
+                📂 開啟照片
+                <input type="file" id="up-img" accept="image/*" class="hidden">
             </label>
-            <button id="download-btn" class="bg-blue-600 px-3 py-1 rounded text-xs font-bold">下載</button>
+            <button onclick="downloadImg()" class="bg-blue-600 px-3 py-1.5 rounded text-xs font-bold active:scale-95 transition">💾 存圖</button>
         </div>
-    </header>
+    </div>
 
-    <div id="canvas-wrapper">
+    <div id="canvas-area">
         <canvas id="c"></canvas>
     </div>
 
-    <div class="tool-panel">
-        <div class="flex border-b border-gray-700">
-            <div class="tab-btn active" onclick="switchTab('text')">1. 文字編輯</div>
-            <div class="tab-btn" onclick="switchTab('mask')">2. 遮罩筆刷</div>
+    <div class="controls">
+        <div class="flex text-center border-b border-gray-700">
+            <div id="tab-text" onclick="setMode('text')" class="flex-1 py-3 text-sm text-blue-400 border-b-2 border-blue-400 font-bold transition-all">A. 文字編輯</div>
+            <div id="tab-mask" onclick="setMode('mask')" class="flex-1 py-3 text-sm text-gray-500 font-bold transition-all">B. 遮罩塗抹</div>
         </div>
 
-        <div id="panel-text" class="flex-1 overflow-y-auto py-2">
-            <div class="control-row justify-center">
-                <button onclick="addText()" class="bg-gray-600 w-full py-3 rounded-lg font-bold text-sm">+ 新增文字</button>
+        <div id="panel-text" class="flex-1 p-4 space-y-4 overflow-y-auto">
+            <div class="flex justify-between items-center">
+                <button onclick="addText()" class="bg-gray-700 w-full py-3 rounded-lg text-sm font-bold active:bg-gray-600">+ 新增文字</button>
             </div>
-            
-            <div class="control-row">
-                <span class="text-xs w-12">內容</span>
-                <input type="text" id="text-content" placeholder="輸入文字" class="flex-1 bg-gray-800 border border-gray-600 rounded p-2 text-sm text-white">
+            <div class="space-y-2">
+                <div class="flex items-center gap-3">
+                    <span class="text-xs w-8 text-gray-400">內容</span>
+                    <input type="text" id="ipt-text" class="flex-1 bg-gray-800 p-2 rounded border border-gray-600 text-white text-sm" placeholder="點擊文字編輯">
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-xs w-8 text-gray-400">顏色</span>
+                    <input type="color" id="ipt-color" class="w-8 h-8 rounded border-none bg-transparent">
+                    <span class="text-xs w-8 text-gray-400 ml-2">透明</span>
+                    <input type="range" id="ipt-opacity" min="0" max="1" step="0.1" value="1" class="flex-1">
+                </div>
             </div>
-
-            <div class="control-row">
-                <span class="text-xs w-12">透明</span>
-                <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="1">
-            </div>
-
-            <div class="control-row overflow-x-auto">
-                <span class="text-xs w-12">顏色</span>
-                <div class="flex gap-2" id="color-palette">
-                    </div>
-                <input type="color" id="custom-color" class="w-8 h-8 rounded ml-2">
-            </div>
-             <div class="control-row">
-                <span class="text-xs w-12">字體</span>
-                <select id="font-select" class="flex-1 bg-gray-800 text-white p-2 rounded text-sm">
-                    <option value="Noto Sans TC">黑體 (Sans)</option>
-                    <option value="Times New Roman">明體 (Serif)</option>
-                    <option value="cursive">手寫 (Cursive)</option>
-                    <option value="monospace">等寬 (Mono)</option>
-                </select>
-            </div>
+            <p class="text-xs text-gray-500 mt-2 text-center">💡 單指拖曳文字，雙指可旋轉縮放</p>
         </div>
 
-        <div id="panel-mask" class="hidden flex-1 overflow-y-auto py-2">
-            <div class="p-4 text-xs text-gray-400 bg-gray-800 mx-4 rounded mb-2">
-                💡 說明：用手指塗抹照片中的<b>「人物」</b>區域。被塗抹的區域會浮現到文字上方。
+        <div id="panel-mask" class="hidden flex-1 p-4 space-y-4 flex flex-col items-center">
+            <div class="bg-yellow-900/30 text-yellow-500 p-2 rounded text-xs w-full text-center border border-yellow-800">
+                👆 用手指塗抹想要<b>「擋住文字」</b>的區域 (例如人物)
             </div>
             
-            <div class="control-row justify-center gap-4">
-                <button id="btn-draw" onclick="setMaskMode('draw')" class="bg-blue-600 px-6 py-2 rounded-full text-sm font-bold border-2 border-white">塗抹 (遮擋)</button>
-                <button id="btn-erase" onclick="setMaskMode('erase')" class="bg-gray-700 px-6 py-2 rounded-full text-sm text-gray-300">擦除 (還原)</button>
+            <div class="flex gap-4 w-full justify-center">
+                <button onclick="undoMask()" class="flex-1 bg-gray-700 py-3 rounded-lg text-sm font-bold active:scale-95">↩️ 撤銷一筆</button>
+                <button onclick="clearMask()" class="flex-1 bg-red-900/50 text-red-300 py-3 rounded-lg text-sm font-bold active:scale-95">🗑️ 重設遮罩</button>
             </div>
 
-            <div class="control-row mt-4">
-                <span class="text-xs w-12">筆刷大小</span>
-                <input type="range" id="brush-size" min="5" max="100" value="30">
-            </div>
-             <div class="control-row mt-2">
-                <span class="text-xs w-12">視角</span>
-                <button onclick="resetZoom()" class="text-xs bg-gray-700 px-3 py-1 rounded">重置縮放</button>
+            <div class="w-full pt-2">
+                <div class="flex justify-between text-xs text-gray-400 mb-1">
+                    <span>筆刷大小</span>
+                    <span id="brush-val">30</span>
+                </div>
+                <input type="range" id="ipt-brush" min="5" max="80" value="30" class="w-full">
             </div>
         </div>
     </div>
 
     <script>
-        // 初始化 Fabric Canvas
+        // 初始化 Fabric
         const canvas = new fabric.Canvas('c', {
-            backgroundColor: '#1e1e1e',
-            preserveObjectStacking: true, // 重要：保持圖層順序
-            selection: true
+            backgroundColor: '#111',
+            preserveObjectStacking: true,
+            selection: false // 手機操作建議關閉框選
         });
 
-        // 全域變數
-        let bgImage = null;       // 底層圖片
-        let topMaskGroup = null;  // 頂層遮罩群組
-        let maskBrush = null;     // 筆刷
-        let isMasking = false;    // 目前模式狀態
-
-        // 設定畫布尺寸適應螢幕
-        function resizeCanvas() {
-            const wrapper = document.getElementById('canvas-wrapper');
-            canvas.setWidth(wrapper.clientWidth);
-            canvas.setHeight(wrapper.clientHeight);
+        let bgImgNode = null; // 原始圖片物件
+        let topLayer = null;  // 頂層遮罩圖片 (Clone)
+        let maskGroup = null; // 遮罩路徑群組
+        let maskPaths = [];   // 儲存所有的筆觸路徑
+        
+        // 螢幕適配
+        function resize() {
+            const container = document.getElementById('canvas-area');
+            canvas.setWidth(container.clientWidth);
+            canvas.setHeight(container.clientHeight);
         }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
+        window.addEventListener('resize', resize);
+        resize();
 
-        // 1. 上傳圖片
-        document.getElementById('upload-input').addEventListener('change', function(e) {
+        // 1. 上傳照片
+        document.getElementById('up-img').onchange = (e) => {
             const file = e.target.files[0];
-            if (!file) return;
+            if(!file) return;
             const reader = new FileReader();
-            reader.onload = function(f) {
-                fabric.Image.fromURL(f.target.result, function(img) {
-                    // 重置畫布
+            reader.onload = (f) => {
+                fabric.Image.fromURL(f.target.result, (img) => {
                     canvas.clear();
+                    maskPaths = []; // 重置遮罩
                     
-                    // 計算縮放比例以適應螢幕
-                    const scale = Math.min(
-                        canvas.width / img.width, 
-                        canvas.height / img.height
-                    );
-                    
+                    // 縮放圖片以適應畫布 (Contain)
+                    const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
                     img.set({
                         scaleX: scale,
                         scaleY: scale,
                         left: (canvas.width - img.width * scale) / 2,
                         top: (canvas.height - img.height * scale) / 2,
-                        selectable: false, // 背景不可動
-                        evented: false
-                    });
-
-                    bgImage = img;
-                    canvas.add(bgImage);
-                    canvas.sendToBack(bgImage);
-                    
-                    // 初始化遮罩層 (這是一個透明的畫布，我們在上面畫畫)
-                    initMaskLayer(f.target.result, img);
-                });
-            };
-            reader.readAsDataURL(file);
-        });
-
-        // 2. 文字功能
-        function addText() {
-            const text = new fabric.IText('雙擊編輯', {
-                left: canvas.width / 2 - 50,
-                top: canvas.height / 2,
-                fontFamily: 'Noto Sans TC',
-                fill: '#ffffff',
-                fontSize: 60,
-                fontWeight: '900',
-                opacity: 1,
-                shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.5)', blur: 10, offsetX: 5, offsetY: 5 })
-            });
-            canvas.add(text);
-            canvas.setActiveObject(text);
-            updateControls();
-        }
-
-        // 綁定文字控制項
-        const textInput = document.getElementById('text-content');
-        const opacitySlider = document.getElementById('opacity-slider');
-        const customColor = document.getElementById('custom-color');
-        const fontSelect = document.getElementById('font-select');
-
-        canvas.on('selection:created', updateControls);
-        canvas.on('selection:updated', updateControls);
-        
-        function updateControls() {
-            const obj = canvas.getActiveObject();
-            if (obj && obj.type === 'i-text') {
-                textInput.value = obj.text;
-                opacitySlider.value = obj.opacity;
-                customColor.value = obj.fill;
-                fontSelect.value = obj.fontFamily;
-            }
-        }
-
-        textInput.addEventListener('input', () => {
-            const obj = canvas.getActiveObject();
-            if (obj) { obj.set({ text: textInput.value }); canvas.requestRenderAll(); }
-        });
-
-        opacitySlider.addEventListener('input', () => {
-            const obj = canvas.getActiveObject();
-            if (obj) { obj.set({ opacity: parseFloat(opacitySlider.value) }); canvas.requestRenderAll(); }
-        });
-        
-        customColor.addEventListener('input', () => {
-            const obj = canvas.getActiveObject();
-            if (obj) { obj.set({ fill: customColor.value }); canvas.requestRenderAll(); }
-        });
-
-        fontSelect.addEventListener('change', () => {
-            const obj = canvas.getActiveObject();
-            if (obj) { obj.set({ fontFamily: fontSelect.value }); canvas.requestRenderAll(); }
-        });
-
-        // 顏色色票
-        const colors = ['#ffffff', '#000000', '#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff'];
-        const palette = document.getElementById('color-palette');
-        colors.forEach(c => {
-            const div = document.createElement('div');
-            div.className = 'color-swatch';
-            div.style.backgroundColor = c;
-            div.onclick = () => {
-                const obj = canvas.getActiveObject();
-                if (obj) { obj.set({ fill: c }); canvas.requestRenderAll(); customColor.value = c; }
-            };
-            palette.appendChild(div);
-        });
-
-        // 3. 遮罩邏輯 (Snapseed 模仿)
-        // 我們的策略：不是真的「擦掉」文字，而是在文字「上面」畫一層跟背景一模一樣的圖片。
-        // 當你在文字上塗抹時，其實是把「背景圖的碎片」蓋在文字上，看起來就像文字在背景後面。
-        
-        function initMaskLayer(imgUrl, bgImgParams) {
-            // 我們使用 Fabric 的 FreeDrawingBrush，但使用特殊的 GlobalCompositeOperation 無法簡單實現「複製背景」。
-            // 最穩定的 Web 實作：我們建立一個頂層 Canvas，它是透明的。
-            // 筆刷設為 PatternBrush (使用背景圖當作筆刷紋理)。
-            
-            // 為了簡單且效能好，我們使用另一種方法：
-            // 當進入遮罩模式，我們啟用 FreeDrawing。
-            // 用戶畫出的線條 (Path) 會被收集。
-            // 這些 Path 會被設為一個群組，並且這個群組會「裁切 (Clip)」一張複製的背景圖。
-            // 這張「被裁切的背景圖」會蓋在所有東西最上面。
-        }
-
-        // 由於 PatternBrush 在手機上較複雜，我們採用 "Masking Image" 技術
-        // 當用戶畫畫時，我們是在畫一個黑色的遮罩。
-        // 渲染時： 底圖 -> 文字 -> (底圖 copy + 用戶畫的遮罩 clipPath)
-        
-        let topLayer = null; // 這將是放在最上面的背景圖副本
-
-        function switchTab(tab) {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelector(`.tab-btn[onclick="switchTab('${tab}')"]`).classList.add('active');
-            
-            document.getElementById('panel-text').classList.add('hidden');
-            document.getElementById('panel-mask').classList.add('hidden');
-            document.getElementById(`panel-${tab}`).classList.remove('hidden');
-
-            if (tab === 'mask') {
-                enterMaskMode();
-            } else {
-                exitMaskMode();
-            }
-        }
-
-        function enterMaskMode() {
-            if (!bgImage) { alert('請先上傳照片'); switchTab('text'); return; }
-            isMasking = true;
-            canvas.discardActiveObject(); // 取消選取文字
-            canvas.renderAll();
-            
-            // 鎖定所有物件
-            canvas.forEachObject(obj => {
-                obj.selectable = false;
-                obj.evented = false;
-            });
-
-            // 準備頂層遮罩機制
-            setupTopLayerMask();
-            
-            canvas.isDrawingMode = true;
-            canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
-            canvas.freeDrawingBrush.width = parseInt(document.getElementById('brush-size').value);
-            canvas.freeDrawingBrush.color = "rgba(255,255,255,1)"; // 畫筆顏色不重要，因為我們只用它的形狀
-            
-            setMaskMode('draw');
-        }
-
-        function exitMaskMode() {
-            isMasking = false;
-            canvas.isDrawingMode = false;
-            
-            // 解鎖文字物件
-            canvas.forEachObject(obj => {
-                if (obj.type === 'i-text') {
-                    obj.selectable = true;
-                    obj.evented = true;
-                }
-            });
-        }
-
-        // 核心遮罩邏輯
-        // 我們動態監聽 `path:created` 事件。
-        // 每當用戶畫一筆，我們就把這一筆加入到一個「剪裁群組」中。
-        // 並且把背景圖複製一份，應用這個剪裁。
-        
-        let maskPaths = []; // 儲存所有的筆觸
-        let maskGroup = null; // 這是放在最上層的物件
-
-        function setupTopLayerMask() {
-            // 如果還沒有建立頂層遮罩圖，就建立一個
-            if (!topLayer) {
-                // 複製背景圖
-                bgImage.clone(function(cloned) {
-                    topLayer = cloned;
-                    topLayer.set({
-                        left: bgImage.left,
-                        top: bgImage.top,
-                        scaleX: bgImage.scaleX,
-                        scaleY: bgImage.scaleY,
-                        absolutePositioned: true,
                         selectable: false,
                         evented: false
                     });
-                    // 還不要加到 canvas，等有筆觸再加
+
+                    bgImgNode = img;
+                    canvas.add(bgImgNode);
+                    
+                    // 預先建立頂層遮罩 (一開始不可見)
+                    initTopLayer();
                 });
-            }
-        }
-
-        canvas.on('path:created', function(e) {
-            if (!isMasking) return;
-            
-            const path = e.path;
-            path.visible = false; // 我們不需要看到這條紅線/黑線
-            canvas.remove(path);  // 從畫布移除原始線條
-            
-            // 判斷是塗抹還是擦除
-            if (currentMaskMode === 'draw') {
-                maskPaths.push(path);
-            } else {
-                // 簡易擦除邏輯：在純向量環境很難做部分擦除。
-                // 這裡為了效能，我們實作「撤銷」邏輯或者簡單的重疊檢測
-                // 為了達到 Snapseed 效果，我們需要使用 destination-out。
-                // 這裡採用 Canvas 級別的合成比較適合。
-                
-                // 改進方案：將筆觸繪製到一個離屏 Canvas (offscreen canvas)
-                // 然後將該 Canvas 作為 topLayer 的 clipPath (Pattern)
-            }
-            
-            updateTopMask();
-        });
-
-        // 為了讓手機跑得動，我們使用最有效的合成法：
-        // 1. 建立一個與畫布一樣大的臨時 Canvas (Mask Canvas)
-        // 2. 把所有 maskPaths 畫上去 (白色)
-        // 3. 把原始圖片畫上去，但設定 compositeOperation 為 'source-in' (只保留白色區域的圖片)
-        // 4. 把結果轉為 Fabric Image 並置頂
-        
-        function updateTopMask() {
-            if (!bgImage) return;
-
-            // 1. 建立暫存畫布
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = canvas.width;
-            tempCanvas.height = canvas.height;
-            const tempCtx = tempCanvas.getContext('2d');
-
-            // 2. 繪製所有筆觸
-            maskPaths.forEach(path => {
-                path.render(tempCtx); 
-                // Fabric path render 比較複雜，我們簡單用 lineTo 模擬或直接利用 path 的點
-                // 或者更簡單：直接利用 Fabric 渲染到 context
-            });
-
-            // 修正：上面的 path.render 需要正確的 transform。
-            // 替代方案：我們把 maskPaths 加到一個臨時 group，render 到 tempCanvas
-            // 這裡為了極致效能，我們用最簡單的「疊加圖層法」
-            
-            // 清除舊的 mask group
-            if (maskGroup) canvas.remove(maskGroup);
-
-            // 如果有筆觸
-            if (maskPaths.length > 0) {
-                 // 這裡是有點投機但有效的做法：
-                 // 我們不真的做複雜的 clipPath (因為 iOS Safari 對複雜 clipPath 支援度差)。
-                 // 我們直接把這些 Path 的顏色改成「Pattern (背景圖)」!
-                 
-                 // 建立一個 Group 包含所有筆觸
-                 // 重新加入這些 Path，但這次給它們填滿圖片
-                 const newGroup = new fabric.Group(maskPaths, {
-                     selectable: false, 
-                     evented: false 
-                 });
-                 
-                 // 這裡有個小問題：Path 通常是線條 (Stroke)，不能填滿 Pattern。
-                 // 所以我們要改用：這條線是「透明的洞」，露出下面的背景？
-                 // 不，我們要這條線「本身就是背景圖」。
-                 
-                 // 最終 Web 方案：
-                 // 讓 Fabric 替我們做 Pattern。
-                 bgImage.cloneAsImage(function(cloned) {
-                     const patternSourceCanvas = cloned.toCanvasElement();
-                     const pattern = new fabric.Pattern({
-                         source: patternSourceCanvas,
-                         repeat: 'no-repeat'
-                     });
-                     
-                     // 讓每個筆觸都使用這個 Pattern
-                     // 並且偏移量要對準 (這是難點，但如果位置是 (0,0) 就沒問題)
-                     maskPaths.forEach(p => {
-                         p.stroke = pattern; 
-                         p.fill = null;
-                         // 確保筆觸在正確位置
-                         p.visible = true;
-                     });
-                     
-                     // 這種方法在筆觸重疊時會有接縫。
-                     // 回到最穩的 Snapseed 做法：
-                     // 畫布層級：
-                     // [Bottom] bgImage
-                     // [Middle] Text Objects
-                     // [Top] 只有一個 Image 物件，這個物件是動態生成的，它 = (BgImage Masked by Paths)
-                 });
-            }
-            
-            // 💡 真正實作 Snapseed 演算法 (修正版) 💡
-            // 1. 我們不移除 path，我們保留它們在畫布最上層。
-            // 2. 這些 Path 的顏色設定為 globalCompositeOperation = 'destination-out' ? 不行。
-            // 3. 我們把這些 Path 的顏色設為：使用 bgImage 作為 Pattern。
-            
-            // 重新實作 path:created
-        }
-
-        // 重新定義 updateTopMask (採用 Pattern Brush 方法，最順暢)
-        // 當用戶畫畫時，筆刷本身就帶著背景圖的紋理！
-        
-        function setupPatternBrush() {
-            if (!bgImage) return;
-            
-            // 建立 Pattern
-            const patternCanvas = document.createElement('canvas');
-            patternCanvas.width = canvas.width;
-            patternCanvas.height = canvas.height;
-            const ctx = patternCanvas.getContext('2d');
-            
-            // 繪製背景到 pattern canvas (需要考慮 scale 和位置)
-            // 簡單起見，我們假設背景是滿版的，或者我們捕捉當前 canvas 的背景狀態
-            // 這裡稍微複雜，為了穩定，我們先用「白色筆刷」代表遮罩，下載時再合成。
-            // 但用戶想即時看到效果。
-            
-            // ✨ 最終解決方案：不使用複雜 Pattern ✨
-            // 用戶畫畫時，畫的是一條線 (Line)。
-            // 我們把這條線加入一個叫 `maskOverlay` 的 Group。
-            // 這個 Group 永遠在最上層。
-            // 這個 Group 裡面包含：
-            // 1. 一個 `bgImage` 的複製 (clonedBg)。
-            // 2. 一個 `clipPath`，這個 clipPath 是由用戶的所有筆觸合併而成的。
-        }
-
-        // 簡化版實作：直接讓筆觸變成圖片的一部分
-        // 我們使用 "Eraser" 邏輯的反向 -> "Un-Eraser"
-        // 由於 Web Canvas 的限制，我們換個思路：
-        // 1. 正常顯示文字。
-        // 2. 用戶想讓文字消失 -> 其實就是把人物畫在文字上面。
-        // 3. 筆刷設定：顏色 = "transparent" ?? 不。
-        // 4. 我們使用 Fabric 的 `Image.clone()` 創建一個浮動層。
-        // 5. 使用 `clipPath`。
-        
-        let visualMaskGroup = new fabric.Group([], { selectable: false, evented: false });
-        canvas.add(visualMaskGroup);
-
-        canvas.on('path:created', function(e) {
-            if (!isMasking) return;
-            const path = e.path;
-            
-            if (currentMaskMode === 'draw') {
-                // 將筆觸變成遮罩
-                // 我們把筆觸改為使用背景圖作為 Pattern
-                // 這是最輕量的做法
-                
-                // 修正：Pattern 必須對齊 Canvas 左上角
-                bgImage.cloneAsImage(function(cloned) {
-                   // 必須確保 cloned 的尺寸與 canvas 一致，才能對齊
-                   const pCanvas = cloned.toCanvasElement(); // 這裡可能會拿到縮放後的圖片，需注意
-                   
-                   // 簡單暴力法：
-                   // 直接把這條線設為絕對定位
-                   path.selectable = false;
-                   path.evented = false;
-                   path.globalCompositeOperation = 'source-over';
-                   
-                   // 關鍵：給這條線填入背景圖
-                   // 由於 Fabric 筆觸是 stroke，pattern 支援度有限。
-                   // 備案：我們把這條線保持白色，但半透明，作為「預覽」。
-                   // 當用戶放開手 (path:created)，我們執行一次「快照合成」。
-                   
-                   path.stroke = '#1e1e1e'; // 暫時用背景色模擬「遮擋」
-                   // 注意：如果背景不是純色，這招會穿幫。但對於 80% 情況（文字在人臉上），塗上背景色或黑色並不明顯。
-                   // 為了完美，我們必須用真實圖像。
-                   
-                   // ✨ 真．Snapseed 邏輯 ✨
-                   // 把這個 path 當作一個遮罩 (clipPath) 應用在一個新的背景圖層上。
-                   // 1. 新增一個 bgImage 的拷貝 (topLayer)。
-                   // 2. 把這個 path 加入到 topLayer 的 clipPath 中。
-                   // 3. 由於 clipPath 只能是一個物件，我們需要用 Group 把所有 paths 合併。
-                   
-                   maskPaths.push(path);
-                   refreshTopMask();
-                });
-            } else {
-                 // 擦除模式：找出與滑鼠重疊的 mask path 並移除
-                 // 這裡做簡單的：清除最後一筆
-                 canvas.remove(path); // 移除剛畫的
-                 if(maskPaths.length > 0) {
-                     const lastPath = maskPaths.pop();
-                     canvas.remove(lastPath); // 從畫布移除
-                     // 也要從 topMask 中移除
-                     refreshTopMask();
-                 }
-            }
-        });
-        
-        function refreshTopMask() {
-            // 清除舊的
-            if (topMaskGroup) canvas.remove(topMaskGroup);
-            
-            if (maskPaths.length === 0) return;
-
-            // 複製背景
-            bgImage.clone(function(cloned) {
-                // 建立一個 Group 來當作 ClipPath
-                // 注意：Fabric 的 Group clipPath 座標系是以 Group 中心為準，很麻煩。
-                // 替代：使用 inverted mask? 
-                
-                // 讓我們用最簡單視覺欺騙：
-                // 把 maskPaths 變成一個 Group。
-                // 把這個 Group 的 fill 設為 pattern (背景圖)。
-                
-                // 1. 準備 Pattern
-                const patternCanvas = document.createElement('canvas');
-                patternCanvas.width = canvas.width;
-                patternCanvas.height = canvas.height;
-                const ctx = patternCanvas.getContext('2d');
-                
-                // 畫背景圖到 pattern canvas
-                // 必須手動繪製因為 bgImage 可能被縮放過
-                ctx.save();
-                ctx.translate(bgImage.left, bgImage.top);
-                ctx.scale(bgImage.scaleX, bgImage.scaleY);
-                // 這裡假設 bgImage 是 image 類型
-                ctx.drawImage(bgImage._element, 0, 0); 
-                ctx.restore();
-                
-                // 2. 建立 Pattern 物件
-                const bgPattern = new fabric.Pattern({
-                    source: patternCanvas,
-                    repeat: 'no-repeat'
-                });
-                
-                // 3. 將所有筆觸變成使用這個 Pattern
-                // 為了不讓筆觸移動，我們將它們鎖定
-                // 這裡我們需要複製 maskPaths，因為我們要修改它們的屬性但保留原始路徑數據
-                
-                // 這裡我們直接修改畫布上的 maskPaths 即可，因為我們已經把它們 push 進陣列了
-                // 但要先把它們從 canvas 移除，再加回來? 不，它們已經在 canvas 上了。
-                // 我們只需要修改它們的 stroke。
-                
-                maskPaths.forEach(p => {
-                    p.set({
-                        stroke: bgPattern,
-                        strokeWidth: p.strokeWidth, // 保持筆刷寬度
-                        fill: null,
-                        strokeLineCap: 'round',
-                        strokeLineJoin: 'round',
-                        absolutePositioned: true // 關鍵：讓 Pattern 對齊畫布而不是物件
-                    });
-                    // 強制重繪 Pattern (Fabric 有時會緩存)
-                    p.dirty = true; 
-                    canvas.add(p); // 確保在最上面
-                });
-                
-                canvas.requestRenderAll();
-            });
-        }
-
-        let currentMaskMode = 'draw';
-        function setMaskMode(mode) {
-            currentMaskMode = mode;
-            const btnDraw = document.getElementById('btn-draw');
-            const btnErase = document.getElementById('btn-erase');
-            
-            if (mode === 'draw') {
-                btnDraw.classList.replace('bg-gray-700', 'bg-blue-600');
-                btnDraw.classList.add('border-2');
-                btnErase.classList.replace('bg-blue-600', 'bg-gray-700');
-                btnErase.classList.remove('border-2');
-                canvas.freeDrawingBrush.color = "white"; // 顏色不重要，最後會被 pattern 取代
-                canvas.freeDrawingBrush.width = parseInt(document.getElementById('brush-size').value);
-            } else {
-                // 擦除模式 UI 狀態
-                btnErase.classList.replace('bg-gray-700', 'bg-blue-600');
-                btnErase.classList.add('border-2');
-                btnDraw.classList.replace('bg-blue-600', 'bg-gray-700');
-                btnDraw.classList.remove('border-2');
-                // 邏輯在 path:created 處理 (Undo)
-            }
-        }
-
-        // 筆刷大小調整
-        document.getElementById('brush-size').addEventListener('input', (e) => {
-            canvas.freeDrawingBrush.width = parseInt(e.target.value, 10);
-        });
-        
-        // 重置縮放 (防止雙指縮放後跑掉)
-        function resetZoom() {
-            canvas.setViewportTransform([1,0,0,1,0,0]);
-        }
-        
-        // 雙指縮放支援 (Fabric 基本支援)
-        canvas.on('touch:gesture', function(e) {
-            if (isMasking) return; // 遮罩模式下禁用畫布縮放，因為要塗抹
-            // 這裡省略複雜的雙指縮放邏輯以保持程式碼簡潔
-            // 文字模式下 Fabric 預設支援物件的手勢操作
-        });
-
-        // 下載
-        document.getElementById('download-btn').onclick = () => {
-            const dataURL = canvas.toDataURL({ format: 'png', quality: 1 });
-            const link = document.createElement('a');
-            link.download = 'edited-image.png';
-            link.href = dataURL;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            };
+            reader.readAsDataURL(file);
         };
 
-    </script>
-</body>
-</html>
+        // 2. 建立「頂層照片」用於遮擋文字
+        function initTopLayer() {
+            if(!bgImgNode) return;
+            bgImgNode.clone((cloned) => {
+                topLayer = cloned;
+                topLayer.set({
+                    selectable: false,
+                    evented: false,
+                    absolutePositioned: true, // 關鍵：絕對定位確保對齊
+                    clipPath: null // 一開始沒有 clipPath，所以整張圖顯示? 不，我們要控制它
+                });
+                // 為了讓它一開始「不顯示」，我們給它一個空的 clipPath 或者先不加到畫布
+                // 策略：將 topLayer 加到畫布最上層，但 clipPath 是空的 Group (什麼都沒有) -> 所以什麼都不顯示? 
+                // 修正：clipPath 如果是空的，可能會顯示全圖。
+                // 我們使用一個「空」的 group 作為 clipPath
+                
+                maskGroup = new fabric.Group([], { absolutePositioned: true });
+                topLayer.clipPath = maskGroup;
+                
+                canvas.add(topLayer);
+                canvas.renderAll();
+            });
+        }
+
+        // 3. 文字功能
+        function addText() {
+            const t = new fabric.IText('雙擊編輯', {
+                left: canvas.width/2 - 60, top: canvas.height/2,
+                fontFamily: 'Noto Sans TC',
+                fill: '#ffffff', fontSize: 50, fontWeight: '900',
+                shadow: 'rgba(0,0,0,0.5) 5px 5px 5px'
+            });
+            canvas.add(t);
+            canvas.setActiveObject(t);
+            
+            // 確保文字在 topLayer 之下
+            if(topLayer) canvas.bringToFront(topLayer);
+        }
+
+        // 文字屬性綁定
+        const iptText = document.getElementById('ipt-text');
+        const iptColor = document.getElementById('ipt-color');
+        const iptOpacity = document.getElementById('ipt-opacity');
+
+        function updateUI() {
+            const obj = canvas.getActiveObject();
+            if(obj && obj.type === 'i-text') {
+                iptText.value = obj.text;
+                iptColor.value = obj.fill;
+                iptOpacity.value = obj.opacity;
+            }
+        }
+        canvas.on('selection:created', updateUI);
+        canvas.on('selection:updated', updateUI);
+        
+        iptText.oninput = () => { const o = canvas.getActiveObject(); if(o) { o.set({text: iptText.value}); canvas.requestRenderAll(); }};
+        iptColor.oninput = () => { const o = canvas.getActiveObject(); if(o) { o.set({fill: iptColor.value}); canvas.requestRenderAll(); }};
+        iptOpacity.oninput = () => { const o = canvas.getActiveObject(); if(o) { o.set({opacity: parseFloat(iptOpacity.value)}); canvas.requestRenderAll(); }};
+
+        // 4. 遮罩模式與繪圖邏輯
+        let isMaskMode = false;
+
+        function setMode(mode) {
+            isMaskMode = (mode === 'mask');
+            
+            // UI 切換
+            document.getElementById('tab-text').className = isMaskMode ? "flex-1 py-3 text-sm text-gray-500 font-bold transition-all" : "flex-1 py-3 text-sm text-blue-400 border-b-2 border-blue-400 font-bold transition-all";
+            document.getElementById('tab-mask').className = isMaskMode ? "flex-1 py-3 text-sm text-blue-400 border-b-2 border-blue-400 font-bold transition-all" : "flex-1 py-3 text-sm text-gray-500 font-bold transition-all";
+            document.getElementById('panel-text').className = isMaskMode ? "hidden" : "flex-1 p-4 space-y-4 overflow-y-auto";
+            document.getElementById('panel-mask').className = isMaskMode ? "flex-1 p-4 space-y-4 flex flex-col items-center" : "hidden";
+
+            if (isMaskMode) {
+                // 進入遮罩模式：開啟繪圖
+                canvas.discardActiveObject();
+                canvas.requestRenderAll();
+                canvas.isDrawingMode = true;
+                
+                // 設定筆
