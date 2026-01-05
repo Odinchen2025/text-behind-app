@@ -3,32 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Text Mask Tool V5 (Blob Engine)</title>
+    <title>Text Mask Tool V6 (Fixed)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;900&display=swap" rel="stylesheet">
+    
     <style>
+        /* 基礎設定 */
         body { background-color: #000; color: white; touch-action: none; overflow: hidden; font-family: 'Noto Sans TC', sans-serif; }
         
+        /* 畫布容器：預設給一個高度，避免塌陷 */
         #canvas-wrapper { 
             position: relative; width: 100vw; height: 60vh; 
             background: #111; display: flex; justify-content: center; align-items: center; overflow: hidden;
         }
 
-        /* 載入動畫層 */
+        /* 載入動畫層 - 預設樣式 */
         #loading-layer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9); z-index: 999;
+            background: rgba(0,0,0,0.9); z-index: 9999;
             display: flex; flex-direction: column; justify-content: center; align-items: center;
         }
         .spinner {
-            width: 40px; height: 40px; border: 4px solid #333; border-top: 4px solid #3b82f6; border-radius: 50%;
+            width: 40px; height: 40px; border: 4px solid #444; border-top: 4px solid #3b82f6; border-radius: 50%;
             animation: spin 0.8s linear infinite; margin-bottom: 15px;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
+        /* 控制面板 */
         .controls { height: 40vh; background: #222; display: flex; flex-direction: column; }
-        .tab-btn { flex: 1; padding: 12px; text-align: center; font-size: 14px; color: #666; border-bottom: 2px solid #333; }
+        .tab-btn { flex: 1; padding: 12px; text-align: center; font-size: 14px; color: #666; border-bottom: 2px solid #333; transition: 0.2s; }
         .tab-btn.active { color: #60a5fa; border-bottom: 2px solid #60a5fa; font-weight: bold; background: #2a2a2a; }
 
         input[type=range] { -webkit-appearance: none; background: transparent; height: 30px; width: 100%; }
@@ -38,20 +42,19 @@
 </head>
 <body class="flex flex-col h-screen">
 
-    <div id="loading-layer" class="hidden">
+    <div id="loading-layer" style="display: none;">
         <div class="spinner"></div>
-        <div id="loading-text" class="text-gray-300 font-bold text-sm">載入中...</div>
-        <button onclick="cancelLoading()" class="mt-4 text-xs text-red-400 border border-red-900 px-3 py-1 rounded">取消</button>
+        <div id="loading-text" class="text-gray-300 font-bold text-sm">處理中...</div>
     </div>
 
-    <div class="flex justify-between items-center px-4 py-3 bg-gray-900 border-b border-gray-800">
-        <span class="font-bold text-gray-400 text-sm">TEXT MASK V5</span>
+    <div class="flex justify-between items-center px-4 py-3 bg-gray-900 border-b border-gray-800 z-50">
+        <span class="font-bold text-gray-400 text-sm">TEXT MASK V6</span>
         <div class="flex gap-2">
-            <label class="bg-blue-600 active:bg-blue-700 px-4 py-1.5 rounded text-xs font-bold transition cursor-pointer flex items-center shadow-lg">
+            <label class="bg-blue-600 active:bg-blue-700 px-4 py-1.5 rounded text-xs font-bold transition cursor-pointer flex items-center shadow-lg text-white">
                 📂 開啟照片
                 <input type="file" id="file-input" accept="image/*" class="hidden">
             </label>
-            <button onclick="saveImage()" class="bg-gray-700 active:bg-gray-600 px-4 py-1.5 rounded text-xs font-bold transition">💾 存圖</button>
+            <button onclick="saveImage()" class="bg-gray-700 active:bg-gray-600 px-4 py-1.5 rounded text-xs font-bold transition text-white">💾 存圖</button>
         </div>
     </div>
 
@@ -66,9 +69,9 @@
         </div>
 
         <div id="panel-text" class="flex-1 p-4 overflow-y-auto space-y-4">
-            <button onclick="addText()" class="w-full bg-gray-700 py-3 rounded text-sm font-bold border border-gray-600 active:bg-gray-600">+ 新增文字</button>
+            <button onclick="addText()" class="w-full bg-gray-700 py-3 rounded text-sm font-bold border border-gray-600 active:bg-gray-600 text-white">+ 新增文字</button>
             <div class="space-y-3">
-                <input type="text" id="val-text" class="w-full bg-gray-800 border border-gray-600 rounded p-2 text-sm text-white text-center" placeholder="點選文字進行修改">
+                <input type="text" id="val-text" class="w-full bg-gray-800 border border-gray-600 rounded p-2 text-sm text-white text-center" placeholder="輸入文字">
                 <div class="flex items-center gap-2">
                     <span class="text-xs text-gray-500">顏色</span>
                     <input type="color" id="val-color" class="w-10 h-10 rounded bg-transparent border-none">
@@ -79,13 +82,12 @@
         </div>
 
         <div id="panel-mask" class="hidden flex-1 p-4 flex flex-col items-center">
-            <div class="text-blue-300 text-xs text-center mb-4 px-4">
-                👆 用手指塗抹<b>人物區域</b><br>
-                <span class="text-gray-500">(被塗抹的區域將會蓋在文字上方)</span>
+            <div class="text-blue-300 text-xs text-center mb-4 px-4 py-2 bg-blue-900/20 rounded border border-blue-900/50">
+                👆 塗抹<b>人物區域</b><br><span class="text-gray-500">(被塗抹的人物將會蓋在文字上方)</span>
             </div>
             <div class="flex gap-3 w-full mb-4 px-2">
-                <button onclick="undoMask()" class="flex-1 bg-gray-700 py-3 rounded text-sm font-bold">↩️ 撤銷</button>
-                <button onclick="resetMask()" class="flex-1 bg-red-900/30 text-red-300 border border-red-900/50 py-3 rounded text-sm font-bold">🗑️ 清除</button>
+                <button onclick="undoMask()" class="flex-1 bg-gray-700 py-3 rounded text-sm font-bold text-white">↩️ 撤銷</button>
+                <button onclick="resetMask()" class="flex-1 bg-red-900/40 text-red-200 border border-red-900/50 py-3 rounded text-sm font-bold">🗑️ 清除</button>
             </div>
             <div class="w-full px-2">
                 <div class="flex justify-between text-xs text-gray-500 mb-1">
@@ -98,233 +100,39 @@
     </div>
 
     <script>
-        // 設定
-        const canvas = new fabric.Canvas('c', {
-            backgroundColor: '#111',
-            preserveObjectStacking: true,
-            selection: false
+        // -----------------------------------------------------------
+        // 1. 安全啟動檢查 (確保 Fabric.js 已載入)
+        // -----------------------------------------------------------
+        let canvas;
+        
+        window.addEventListener('DOMContentLoaded', () => {
+            // 檢查 Fabric 是否存在
+            if (typeof fabric === 'undefined') {
+                alert("錯誤：Fabric.js 函式庫載入失敗，請檢查網路連線後重新整理。");
+                return;
+            }
+            initApp();
         });
 
+        // 全域變數
         let bgImage = null;
         let topMaskLayer = null;
         let maskPaths = [];
         let isMaskMode = false;
-
-        // UI 綁定
+        
+        // 載入提示控制
         const loadingEl = document.getElementById('loading-layer');
         const loadingText = document.getElementById('loading-text');
-        
+
         function showLoading(msg) {
-            loadingText.innerText = msg || "載入中...";
-            loadingEl.classList.remove('hidden');
+            loadingText.innerText = msg || "處理中...";
+            loadingEl.style.display = 'flex'; // 用 JS 強制顯示
         }
+
         function hideLoading() {
-            loadingEl.classList.add('hidden');
+            loadingEl.style.display = 'none'; // 用 JS 強制隱藏
         }
-        function cancelLoading() { hideLoading(); }
 
-        // 適應螢幕
-        function fitCanvas() {
+        function initApp() {
+            // 初始化畫布
             const wrapper = document.getElementById('canvas-wrapper');
-            canvas.setWidth(wrapper.clientWidth);
-            canvas.setHeight(wrapper.clientHeight);
-        }
-        window.addEventListener('resize', fitCanvas);
-        setTimeout(fitCanvas, 50);
-
-        // ---------------------------------------------
-        // 核心修正：使用 Blob URL 讀取圖片 (極速模式)
-        // ---------------------------------------------
-        document.getElementById('file-input').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            showLoading("讀取照片中...");
-
-            // 1. 建立 Blob URL (不佔用 JS Heap 記憶體)
-            const imgUrl = URL.createObjectURL(file);
-
-            fabric.Image.fromURL(imgUrl, function(img) {
-                // 2. 釋放 URL 記憶體
-                URL.revokeObjectURL(imgUrl);
-
-                if (!img) {
-                    alert("無法解析圖片");
-                    hideLoading();
-                    return;
-                }
-
-                // 重置畫布
-                canvas.clear();
-                maskPaths = [];
-                canvas.setBackgroundColor('#111', canvas.renderAll.bind(canvas));
-
-                // 3. 智慧縮放 (防止手機當機)
-                // 如果圖片大於 2048px，稍微縮小它，這是手機 Canvas 的安全線
-                const maxSafeSize = 2048; 
-                if (img.width > maxSafeSize || img.height > maxSafeSize) {
-                    img.scaleToWidth(maxSafeSize);
-                }
-
-                // 計算顯示比例 (Contain)
-                const scale = Math.min(
-                    canvas.width / (img.width * img.scaleX),
-                    canvas.height / (img.height * img.scaleY)
-                );
-
-                // 設定底圖
-                img.set({
-                    originX: 'center', originY: 'center',
-                    left: canvas.width / 2, top: canvas.height / 2,
-                    scaleX: img.scaleX * scale,
-                    scaleY: img.scaleY * scale,
-                    selectable: false, evented: false
-                });
-
-                bgImage = img;
-                canvas.add(bgImage);
-
-                // 4. 建立遮罩層 (複製一份底圖放在最上面)
-                bgImage.clone(function(cloned) {
-                    topMaskLayer = cloned;
-                    topMaskLayer.set({
-                        selectable: false, evented: false, absolutePositioned: true,
-                        // 初始遮罩是空的 (全透明)
-                        clipPath: new fabric.Group([], { absolutePositioned: true })
-                    });
-                    canvas.add(topMaskLayer);
-                    
-                    // 自動加個文字讓用戶知道成功了
-                    addText();
-                    
-                    hideLoading();
-                });
-
-            }, { crossOrigin: 'anonymous' }); // 保持匿名跨域設定
-        });
-
-        // ---------------------------------------------
-        // 文字功能
-        // ---------------------------------------------
-        function addText() {
-            if (!bgImage) return;
-            const t = new fabric.IText('文字特效', {
-                left: canvas.width/2, top: canvas.height/2, originX: 'center', originY: 'center',
-                fontFamily: 'Noto Sans TC', fill: '#ffffff', fontSize: 60, fontWeight: '900',
-                shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.5)', blur: 10, offsetX: 5, offsetY: 5 })
-            });
-            canvas.add(t);
-            canvas.setActiveObject(t);
-            // 確保遮罩層永遠在最上面
-            if(topMaskLayer) canvas.bringToFront(topMaskLayer);
-        }
-
-        const uiText = document.getElementById('val-text');
-        const uiColor = document.getElementById('val-color');
-        const uiOpacity = document.getElementById('val-opacity');
-
-        function updateUI() {
-            const obj = canvas.getActiveObject();
-            if (obj && obj.type === 'i-text') {
-                uiText.value = obj.text;
-                uiColor.value = obj.fill;
-                uiOpacity.value = obj.opacity;
-            }
-        }
-        canvas.on('selection:created', updateUI);
-        canvas.on('selection:updated', updateUI);
-
-        uiText.oninput = () => { const o = canvas.getActiveObject(); if(o && o.type==='i-text'){ o.set({text: uiText.value}); canvas.requestRenderAll(); }};
-        uiColor.oninput = () => { const o = canvas.getActiveObject(); if(o && o.type==='i-text'){ o.set({fill: uiColor.value}); canvas.requestRenderAll(); }};
-        uiOpacity.oninput = () => { const o = canvas.getActiveObject(); if(o && o.type==='i-text'){ o.set({opacity: parseFloat(uiOpacity.value)}); canvas.requestRenderAll(); }};
-
-        // ---------------------------------------------
-        // 遮罩與塗抹功能 (Snapseed 模式)
-        // ---------------------------------------------
-        function switchMode(mode) {
-            isMaskMode = (mode === 'mask');
-            
-            // 樣式切換
-            document.getElementById('tab-text').className = isMaskMode ? 'tab-btn' : 'tab-btn active';
-            document.getElementById('tab-mask').className = isMaskMode ? 'tab-btn active' : 'tab-btn';
-            document.getElementById('panel-text').classList.toggle('hidden', isMaskMode);
-            document.getElementById('panel-mask').classList.toggle('hidden', !isMaskMode);
-
-            if (isMaskMode) {
-                if(!bgImage) { alert("請先開啟照片"); switchMode('text'); return; }
-                canvas.discardActiveObject();
-                canvas.requestRenderAll();
-                
-                // 設定筆刷：半透明紅色預覽
-                canvas.isDrawingMode = true;
-                const brush = new fabric.PencilBrush(canvas);
-                brush.color = "rgba(255, 50, 50, 0.5)"; 
-                brush.width = parseInt(document.getElementById('val-brush').value);
-                canvas.freeDrawingBrush = brush;
-                
-                canvas.forEachObject(o => o.selectable = false);
-            } else {
-                canvas.isDrawingMode = false;
-                canvas.forEachObject(o => { if(o.type === 'i-text') o.selectable = true; });
-            }
-        }
-
-        document.getElementById('val-brush').oninput = (e) => {
-            const size = parseInt(e.target.value);
-            document.getElementById('brush-size-val').innerText = size;
-            if(canvas.freeDrawingBrush) canvas.freeDrawingBrush.width = size;
-        };
-
-        // 塗抹結束時的處理
-        canvas.on('path:created', function(e) {
-            if (!isMaskMode) return;
-            const path = e.path;
-            canvas.remove(path); // 移除紅線
-
-            // 複製路徑加入遮罩群組
-            path.clone(function(cloned) {
-                cloned.set({
-                    stroke: 'black', fill: null,
-                    strokeWidth: path.strokeWidth, strokeLineCap: 'round', strokeLineJoin: 'round',
-                    left: path.left, top: path.top,
-                    globalCompositeOperation: 'source-over'
-                });
-                maskPaths.push(cloned);
-                applyMask();
-            });
-        });
-
-        function applyMask() {
-            if (!topMaskLayer) return;
-            // 組合所有筆觸成為剪裁路徑
-            const group = new fabric.Group(maskPaths, { absolutePositioned: true, inverted: false });
-            topMaskLayer.clipPath = group;
-            topMaskLayer.dirty = true;
-            canvas.requestRenderAll();
-        }
-
-        function undoMask() {
-            if (maskPaths.length > 0) { maskPaths.pop(); applyMask(); }
-        }
-        function resetMask() {
-            maskPaths = []; applyMask();
-        }
-
-        // ---------------------------------------------
-        // 存圖
-        // ---------------------------------------------
-        function saveImage() {
-            if(!bgImage) return;
-            canvas.discardActiveObject();
-            canvas.renderAll();
-            
-            // 輸出 2 倍高解析度
-            const link = document.createElement('a');
-            link.href = canvas.toDataURL({ format: 'png', quality: 0.9, multiplier: 2 });
-            link.download = 'text_mask_pro.png';
-            link.click();
-        }
-
-    </script>
-</body>
-</html>
