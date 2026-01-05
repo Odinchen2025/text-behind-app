@@ -3,306 +3,373 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Text Behind Image Tool v3</title>
+    <title>Text Mask Tool V4 (Stable)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;900&display=swap" rel="stylesheet">
     <style>
         body { background-color: #000; color: white; touch-action: none; overflow: hidden; font-family: 'Noto Sans TC', sans-serif; }
-        #canvas-area { 
+        
+        /* 畫布區域 */
+        #canvas-wrapper { 
             position: relative; width: 100vw; height: 55vh; 
-            background: #111; display: flex; justify-content: center; align-items: center; overflow: hidden;
+            background: #1a1a1a; display: flex; justify-content: center; align-items: center; overflow: hidden;
         }
+
         /* 載入遮罩 */
-        #loading-overlay {
-            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.8); z-index: 100;
-            display: flex; justify-content: center; align-items: center;
-            color: #3b82f6; font-weight: bold; font-size: 1.2rem;
+        #loading-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); z-index: 999;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
         }
-        .controls { height: 45vh; background: #222; display: flex; flex-direction: column; padding-bottom: 20px;}
-        input[type=range] { -webkit-appearance: none; background: transparent; }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #3b82f6; margin-top: -8px; }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid #3b82f6;
+            width: 40px; height: 40px; animation: spin 1s linear infinite; mb-2;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* 控制區 */
+        .controls { height: 45vh; background: #222; display: flex; flex-direction: column; }
+        
+        /* 頁籤樣式 */
+        .tab-btn { flex: 1; padding: 12px; text-align: center; font-size: 14px; color: #888; border-bottom: 2px solid #333; transition: 0.2s; }
+        .tab-btn.active { color: #60a5fa; border-bottom: 2px solid #60a5fa; font-weight: bold; background: #2a2a2a; }
+
+        input[type=range] { -webkit-appearance: none; background: transparent; height: 30px; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #3b82f6; margin-top: -8px; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
         input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #4b5563; border-radius: 2px; }
     </style>
 </head>
 <body class="flex flex-col h-screen">
 
-    <div id="loading-overlay" class="hidden">
-        <span>⟳ 處理照片中...</span>
+    <div id="loading-layer" class="hidden">
+        <div class="spinner"></div>
+        <div class="mt-4 text-blue-400 font-bold">處理中...</div>
     </div>
 
-    <div class="flex justify-between items-center p-3 bg-gray-900 border-b border-gray-800 z-50">
-        <span class="font-bold text-gray-400 text-sm">TEXT MASK v3</span>
+    <div class="flex justify-between items-center px-4 py-3 bg-gray-900 border-b border-gray-800">
+        <span class="font-bold text-gray-300 text-sm">TEXT MASK V4</span>
         <div class="flex gap-2">
-            <label class="bg-gray-700 px-3 py-1.5 rounded text-xs font-bold active:scale-95 transition cursor-pointer flex items-center gap-1">
-                📂 開啟照片
-                <input type="file" id="up-img" accept="image/*" class="hidden">
+            <label class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-xs font-bold transition cursor-pointer flex items-center">
+                📂 開啟
+                <input type="file" id="file-input" accept="image/*" class="hidden">
             </label>
-            <button onclick="downloadImg()" class="bg-blue-600 px-3 py-1.5 rounded text-xs font-bold active:scale-95 transition">💾 存圖</button>
+            <button onclick="saveImage()" class="bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded text-xs font-bold transition">💾 存圖</button>
         </div>
     </div>
 
-    <div id="canvas-area">
+    <div id="canvas-wrapper">
         <canvas id="c"></canvas>
     </div>
 
     <div class="controls">
-        <div class="flex text-center border-b border-gray-700">
-            <div id="tab-text" onclick="setMode('text')" class="flex-1 py-3 text-sm text-blue-400 border-b-2 border-blue-400 font-bold transition-all">A. 文字編輯</div>
-            <div id="tab-mask" onclick="setMode('mask')" class="flex-1 py-3 text-sm text-gray-500 font-bold transition-all">B. 遮罩塗抹</div>
+        <div class="flex">
+            <div id="tab-text" onclick="switchMode('text')" class="tab-btn active">A. 文字編輯</div>
+            <div id="tab-mask" onclick="switchMode('mask')" class="tab-btn">B. 遮罩 (人物)</div>
         </div>
 
-        <div id="panel-text" class="flex-1 p-4 space-y-4 overflow-y-auto">
-            <button onclick="addText()" class="bg-gray-700 w-full py-3 rounded-lg text-sm font-bold active:bg-gray-600">+ 新增文字</button>
-            <div class="space-y-2">
-                <div class="flex items-center gap-3">
-                    <span class="text-xs w-8 text-gray-400">內容</span>
-                    <input type="text" id="ipt-text" class="flex-1 bg-gray-800 p-2 rounded border border-gray-600 text-white text-sm" placeholder="輸入文字">
+        <div id="panel-text" class="flex-1 p-4 overflow-y-auto space-y-4">
+            <button onclick="addNewText()" class="w-full bg-gray-700 py-3 rounded text-sm font-bold border border-gray-600 shadow-sm active:bg-gray-600">+ 新增文字</button>
+            
+            <div class="space-y-3">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-gray-400 w-8">內容</span>
+                    <input type="text" id="val-text" class="flex-1 bg-gray-800 border border-gray-600 rounded p-2 text-sm text-white" placeholder="點選文字修改">
                 </div>
-                <div class="flex items-center gap-3">
-                    <span class="text-xs w-8 text-gray-400">顏色</span>
-                    <input type="color" id="ipt-color" class="w-8 h-8 rounded border-none bg-transparent">
-                    <span class="text-xs w-8 text-gray-400 ml-2">透明</span>
-                    <input type="range" id="ipt-opacity" min="0" max="1" step="0.1" value="1" class="flex-1">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-gray-400 w-8">樣式</span>
+                    <input type="color" id="val-color" class="w-8 h-8 rounded border-none bg-transparent cursor-pointer">
+                    <input type="range" id="val-opacity" min="0" max="1" step="0.1" value="1" class="flex-1 ml-2">
                 </div>
             </div>
+            <p class="text-xs text-gray-500 text-center mt-2">💡 提示：單指拖曳文字，雙指可旋轉/縮放</p>
         </div>
 
-        <div id="panel-mask" class="hidden flex-1 p-4 space-y-4 flex flex-col items-center">
-            <div class="bg-yellow-900/30 text-yellow-500 p-2 rounded text-xs w-full text-center border border-yellow-800">
-                👆 用手指塗抹<b>「人物」</b> (會顯示紅色預覽)
+        <div id="panel-mask" class="hidden flex-1 p-4 flex flex-col items-center">
+            <div class="bg-blue-900/30 text-blue-300 border border-blue-800 p-2 rounded text-xs w-full text-center mb-4">
+                🖌️ 用手指塗抹照片中的<b>人物</b><br>
+                <span class="text-gray-400">(塗抹處會浮現到文字上方)</span>
             </div>
-            <div class="flex gap-4 w-full justify-center">
-                <button onclick="undoMask()" class="flex-1 bg-gray-700 py-3 rounded-lg text-sm font-bold active:scale-95">↩️ 撤銷</button>
-                <button onclick="clearMask()" class="flex-1 bg-red-900/50 text-red-300 py-3 rounded-lg text-sm font-bold active:scale-95">🗑️ 清除</button>
+            
+            <div class="flex gap-3 w-full mb-4">
+                <button onclick="undoLastMask()" class="flex-1 bg-gray-700 py-3 rounded text-sm font-bold active:scale-95">↩️ 撤銷</button>
+                <button onclick="resetMask()" class="flex-1 bg-red-900/40 text-red-300 border border-red-900/50 py-3 rounded text-sm font-bold active:scale-95">🗑️ 全部清除</button>
             </div>
-            <div class="w-full pt-2">
+
+            <div class="w-full">
                 <div class="flex justify-between text-xs text-gray-400 mb-1">
                     <span>筆刷大小</span>
-                    <span id="brush-val">30</span>
+                    <span id="brush-size-text">30</span>
                 </div>
-                <input type="range" id="ipt-brush" min="5" max="80" value="30" class="w-full">
+                <input type="range" id="val-brush" min="5" max="80" value="30" class="w-full">
             </div>
         </div>
     </div>
 
     <script>
-        // 顯示載入中
-        const loader = document.getElementById('loading-overlay');
-        function showLoading(show) {
-            loader.classList.toggle('hidden', !show);
-        }
-
+        // 1. 初始化 Fabric Canvas
         const canvas = new fabric.Canvas('c', {
-            backgroundColor: '#111',
-            preserveObjectStacking: true,
-            selection: false
+            backgroundColor: '#1a1a1a',
+            preserveObjectStacking: true, // 重要：保持圖層順序
+            selection: false // 手機禁用框選
         });
 
-        let bgImgNode = null; 
-        let topLayer = null;  
-        let maskPaths = [];
-        
-        // 螢幕適配
-        function resize() {
-            const container = document.getElementById('canvas-area');
-            if(container.clientWidth > 0 && container.clientHeight > 0){
-                 canvas.setWidth(container.clientWidth);
-                 canvas.setHeight(container.clientHeight);
+        // 全域變數
+        let bgImage = null;       // 底圖
+        let topMaskLayer = null;  // 遮罩層 (複製的底圖)
+        let maskPaths = [];       // 筆觸路徑
+        let isProcessing = false;
+
+        // UI 元素
+        const loadingEl = document.getElementById('loading-layer');
+        const fileInput = document.getElementById('file-input');
+
+        // 螢幕尺寸調整
+        function resizeCanvas() {
+            const wrapper = document.getElementById('canvas-wrapper');
+            if (wrapper.clientWidth && wrapper.clientHeight) {
+                canvas.setWidth(wrapper.clientWidth);
+                canvas.setHeight(wrapper.clientHeight);
+                canvas.renderAll();
             }
         }
-        window.addEventListener('resize', resize);
-        // 延遲執行一次以確保 CSS 載入完畢
-        setTimeout(resize, 100);
+        window.addEventListener('resize', resizeCanvas);
+        setTimeout(resizeCanvas, 100); // 確保 CSS 載入後執行
 
-        // 1. 上傳照片 (修復黑屏關鍵邏輯)
-        document.getElementById('up-img').onchange = (e) => {
+        // 2. 圖片上傳邏輯 (V4 穩定版)
+        fileInput.addEventListener('change', function(e) {
             const file = e.target.files[0];
-            if(!file) return;
+            if (!file) return;
+
+            // 顯示載入中
+            loadingEl.classList.remove('hidden');
             
-            showLoading(true);
-
             const reader = new FileReader();
-            reader.onload = (f) => {
-                const imgObj = new Image();
-                imgObj.src = f.target.result;
-                imgObj.onload = function() {
-                    // 創建 Fabric 圖片
-                    const imgInstance = new fabric.Image(imgObj);
-                    
-                    canvas.clear();
-                    maskPaths = [];
-                    canvas.setBackgroundColor('#111', canvas.renderAll.bind(canvas)); // 強制重繪背景
-
-                    // 計算縮放 (限制最大寬度以防黑屏)
-                    const maxDim = 1500; // 手機安全限制
-                    if (imgInstance.width > maxDim || imgInstance.height > maxDim) {
-                        imgInstance.scaleToWidth(maxDim);
+            reader.onload = function(f) {
+                const dataUrl = f.target.result;
+                
+                // 使用 fromURL 讀取 (較穩定)
+                fabric.Image.fromURL(dataUrl, function(img) {
+                    if (!img) {
+                        alert('圖片讀取失敗，請換一張試試。');
+                        loadingEl.classList.add('hidden');
+                        return;
                     }
 
-                    // 畫布適配
-                    const scale = Math.min(
-                        canvas.width / (imgInstance.width * imgInstance.scaleX), 
-                        canvas.height / (imgInstance.height * imgInstance.scaleY)
-                    );
-                    
-                    // 如果 scale 是 Infinity (畫布未初始化), 給個預設值
-                    const finalScale = isFinite(scale) ? scale : 0.5;
+                    try {
+                        // 重置狀態
+                        canvas.clear();
+                        maskPaths = [];
+                        canvas.setBackgroundColor('#1a1a1a', canvas.renderAll.bind(canvas));
 
-                    imgInstance.set({
-                        scaleX: imgInstance.scaleX * finalScale,
-                        scaleY: imgInstance.scaleY * finalScale,
-                        originX: 'center', 
-                        originY: 'center',
-                        left: canvas.width / 2,
-                        top: canvas.height / 2,
-                        selectable: false,
-                        evented: false
-                    });
+                        // 限制最大尺寸 (防止手機崩潰)
+                        const maxDim = 1280; 
+                        if (img.width > maxDim || img.height > maxDim) {
+                            img.scaleToWidth(maxDim);
+                        }
 
-                    bgImgNode = imgInstance;
-                    canvas.add(bgImgNode);
-                    canvas.renderAll();
-                    
-                    // 延遲建立頂層遮罩，避免卡頓
-                    setTimeout(() => {
-                        initTopLayer();
-                        showLoading(false);
-                    }, 100);
-                };
-                
-                imgObj.onerror = function() {
-                    alert("圖片讀取失敗，請換一張試試");
-                    showLoading(false);
-                }
+                        // 計算縮放比例 (Contain)
+                        const scale = Math.min(
+                            canvas.width / (img.width * img.scaleX),
+                            canvas.height / (img.height * img.scaleY)
+                        ) || 0.5; // 防止 scale 為 Infinity
+
+                        img.set({
+                            originX: 'center', originY: 'center',
+                            left: canvas.width / 2, top: canvas.height / 2,
+                            scaleX: img.scaleX * scale,
+                            scaleY: img.scaleY * scale,
+                            selectable: false, evented: false
+                        });
+
+                        bgImage = img;
+                        canvas.add(bgImage);
+                        
+                        // 建立遮罩層 (非同步處理以避免卡頓)
+                        setTimeout(() => {
+                            initTopMaskLayer(img); // 傳入原始 img 物件
+                            loadingEl.classList.add('hidden'); // 關閉載入
+                            addNewText(); // 自動加個文字方便測試
+                        }, 50);
+
+                    } catch (err) {
+                        alert('處理錯誤: ' + err.message);
+                        loadingEl.classList.add('hidden');
+                    }
+                }, { crossOrigin: 'anonymous' }); // 嘗試解決某些跨域問題
+            };
+            reader.onerror = () => {
+                alert('檔案讀取錯誤');
+                loadingEl.classList.add('hidden');
             };
             reader.readAsDataURL(file);
-        };
+        });
 
-        // 2. 建立遮罩層
-        function initTopLayer() {
-            if(!bgImgNode) return;
-            bgImgNode.clone((cloned) => {
-                topLayer = cloned;
-                topLayer.set({
-                    selectable: false, evented: false, absolutePositioned: true,
+        // 3. 建立頂層遮罩 (複製底圖)
+        function initTopMaskLayer(sourceImg) {
+            sourceImg.clone(function(cloned) {
+                topMaskLayer = cloned;
+                topMaskLayer.set({
+                    selectable: false, 
+                    evented: false,
+                    absolutePositioned: true, // 關鍵：絕對定位確保重疊
+                    // 初始設定一個空的 clipPath
                     clipPath: new fabric.Group([], { absolutePositioned: true }) 
                 });
-                canvas.add(topLayer);
-                canvas.requestRenderAll();
+                canvas.add(topMaskLayer);
+                canvas.renderAll();
             });
         }
 
-        // 3. 文字功能
-        function addText() {
-            if (!bgImgNode) { alert("請先上傳照片！"); return; }
-            const t = new fabric.IText('雙擊編輯', {
-                left: canvas.width/2, top: canvas.height/2, originX: 'center', originY: 'center',
-                fontFamily: 'Noto Sans TC', fill: '#ffffff', fontSize: 60, fontWeight: '900',
-                shadow: 'rgba(0,0,0,0.5) 5px 5px 5px'
+        // 4. 文字編輯邏輯
+        function addNewText() {
+            if (!bgImage) return;
+            const text = new fabric.IText('編輯文字', {
+                left: canvas.width / 2, top: canvas.height / 2,
+                originX: 'center', originY: 'center',
+                fontFamily: 'Noto Sans TC', fill: '#ffffff',
+                fontSize: 60, fontWeight: '900',
+                shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.5)', blur: 10, offsetX: 5, offsetY: 5 })
             });
-            canvas.add(t);
-            canvas.setActiveObject(t);
-            if(topLayer) canvas.bringToFront(topLayer);
+            canvas.add(text);
+            canvas.setActiveObject(text);
+            
+            // 確保文字在遮罩層下面，底圖上面 (Canvas 自動處理順序，只要 TopLayer 是最後加的)
+            // 如果需要，強制 TopLayer 置頂
+            if(topMaskLayer) canvas.bringToFront(topMaskLayer);
         }
 
-        // 文字 UI 連動
-        const iptText = document.getElementById('ipt-text');
-        const iptColor = document.getElementById('ipt-color');
-        const iptOpacity = document.getElementById('ipt-opacity');
+        // 綁定文字 UI
+        const valText = document.getElementById('val-text');
+        const valColor = document.getElementById('val-color');
+        const valOpacity = document.getElementById('val-opacity');
 
-        function updateUI() {
+        function updateTextUI() {
             const obj = canvas.getActiveObject();
-            if(obj && obj.type === 'i-text') {
-                iptText.value = obj.text;
-                iptColor.value = obj.fill;
-                iptOpacity.value = obj.opacity;
+            if (obj && obj.type === 'i-text') {
+                valText.value = obj.text;
+                valColor.value = obj.fill;
+                valOpacity.value = obj.opacity;
             }
         }
-        canvas.on('selection:created', updateUI);
-        canvas.on('selection:updated', updateUI);
-        iptText.oninput = () => { const o = canvas.getActiveObject(); if(o) { o.set({text: iptText.value}); canvas.requestRenderAll(); }};
-        iptColor.oninput = () => { const o = canvas.getActiveObject(); if(o) { o.set({fill: iptColor.value}); canvas.requestRenderAll(); }};
-        iptOpacity.oninput = () => { const o = canvas.getActiveObject(); if(o) { o.set({opacity: parseFloat(iptOpacity.value)}); canvas.requestRenderAll(); }};
+        
+        canvas.on('selection:created', updateTextUI);
+        canvas.on('selection:updated', updateTextUI);
 
-        // 4. 遮罩模式
+        valText.oninput = () => { const o = canvas.getActiveObject(); if(o && o.type==='i-text'){ o.set({text: valText.value}); canvas.requestRenderAll(); }};
+        valColor.oninput = () => { const o = canvas.getActiveObject(); if(o && o.type==='i-text'){ o.set({fill: valColor.value}); canvas.requestRenderAll(); }};
+        valOpacity.oninput = () => { const o = canvas.getActiveObject(); if(o && o.type==='i-text'){ o.set({opacity: parseFloat(valOpacity.value)}); canvas.requestRenderAll(); }};
+
+
+        // 5. 遮罩繪圖邏輯 (核心 Snapseed 模式)
         let isMaskMode = false;
-        function setMode(mode) {
+        
+        function switchMode(mode) {
             isMaskMode = (mode === 'mask');
-            document.getElementById('tab-text').className = isMaskMode ? "flex-1 py-3 text-sm text-gray-500 font-bold" : "flex-1 py-3 text-sm text-blue-400 border-b-2 border-blue-400 font-bold";
-            document.getElementById('tab-mask').className = isMaskMode ? "flex-1 py-3 text-sm text-blue-400 border-b-2 border-blue-400 font-bold" : "flex-1 py-3 text-sm text-gray-500 font-bold";
-            document.getElementById('panel-text').className = isMaskMode ? "hidden" : "flex-1 p-4 space-y-4 overflow-y-auto";
-            document.getElementById('panel-mask').className = isMaskMode ? "flex-1 p-4 space-y-4 flex flex-col items-center" : "hidden";
+            
+            // 切換 UI
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`tab-${mode}`).classList.add('active');
+            
+            document.getElementById('panel-text').classList.add('hidden');
+            document.getElementById('panel-mask').classList.add('hidden');
+            document.getElementById(`panel-${mode}`).classList.remove('hidden');
 
             if (isMaskMode) {
-                canvas.discardActiveObject();
-                canvas.renderAll();
+                if(!bgImage) { alert('請先開啟照片'); switchMode('text'); return; }
+                
+                // 進入遮罩模式
+                canvas.discardActiveObject(); // 取消選取文字
+                canvas.requestRenderAll();
+                
+                // 開啟畫筆
                 canvas.isDrawingMode = true;
                 const brush = new fabric.PencilBrush(canvas);
-                brush.color = "rgba(255, 0, 0, 0.5)"; // 紅色預覽
-                brush.width = parseInt(document.getElementById('ipt-brush').value);
+                brush.color = "rgba(255, 0, 0, 0.5)"; // 紅色半透明預覽
+                brush.width = parseInt(document.getElementById('val-brush').value);
                 canvas.freeDrawingBrush = brush;
-                canvas.forEachObject(o => { o.selectable = false; });
+                
+                // 鎖定所有物件
+                canvas.forEachObject(o => o.selectable = false);
             } else {
+                // 回到文字模式
                 canvas.isDrawingMode = false;
                 canvas.forEachObject(o => { if(o.type === 'i-text') o.selectable = true; });
             }
         }
 
-        document.getElementById('ipt-brush').oninput = (e) => {
-            document.getElementById('brush-val').innerText = e.target.value;
+        // 調整筆刷
+        document.getElementById('val-brush').oninput = (e) => {
+            document.getElementById('brush-size-text').innerText = e.target.value;
             if(canvas.freeDrawingBrush) canvas.freeDrawingBrush.width = parseInt(e.target.value);
         };
 
-        canvas.on('path:created', (e) => {
+        // 監聽：畫完一筆後
+        canvas.on('path:created', function(e) {
             if (!isMaskMode) return;
-            const path = e.path;
-            canvas.remove(path); // 移除紅色軌跡
             
-            // 轉為遮罩
-            path.clone((cloned) => {
+            const path = e.path;
+            canvas.remove(path); // 移除紅色預覽線
+            
+            // 複製路徑並加入遮罩群組
+            path.clone(function(cloned) {
                 cloned.set({
-                    stroke: 'black', fill: null, 
-                    strokeWidth: path.strokeWidth, strokeLineCap: 'round', strokeLineJoin: 'round',
-                    left: path.left, top: path.top
+                    stroke: 'black', // 顏色不重要，重點是不透明
+                    fill: null,
+                    strokeWidth: path.strokeWidth,
+                    strokeLineCap: 'round',
+                    strokeLineJoin: 'round',
+                    left: path.left,
+                    top: path.top,
+                    globalCompositeOperation: 'source-over'
                 });
+                
                 maskPaths.push(cloned);
-                updateMask();
+                applyMaskToTopLayer();
             });
         });
 
-        function updateMask() {
-            if (!topLayer) return;
-            const g = new fabric.Group(maskPaths, { absolutePositioned: true, inverted: false });
-            topLayer.clipPath = g;
-            topLayer.dirty = true;
+        function applyMaskToTopLayer() {
+            if (!topMaskLayer) return;
+            
+            // 將所有路徑組合成一個 Group
+            const group = new fabric.Group(maskPaths, {
+                absolutePositioned: true,
+                inverted: false // 我們要「顯示」被塗抹的區域
+            });
+            
+            topMaskLayer.clipPath = group;
+            topMaskLayer.dirty = true;
             canvas.requestRenderAll();
         }
 
-        function undoMask() {
-            if(maskPaths.length > 0) { maskPaths.pop(); updateMask(); }
-        }
-        function clearMask() {
-            maskPaths = []; updateMask();
+        function undoLastMask() {
+            if (maskPaths.length > 0) {
+                maskPaths.pop();
+                applyMaskToTopLayer();
+            }
         }
 
-        // 5. 下載
-        function downloadImg() {
-            if (!bgImgNode) return;
-            // 暫時隱藏控制項進行截圖
+        function resetMask() {
+            maskPaths = [];
+            applyMaskToTopLayer();
+        }
+
+        // 6. 存圖
+        function saveImage() {
+            if (!bgImage) return;
+            
+            // 暫時隱藏控制項，確保純淨
             canvas.discardActiveObject();
             canvas.renderAll();
             
-            // 針對手機高解析度輸出
-            const pixelRatio = window.devicePixelRatio || 1;
-            const data = canvas.toDataURL({ format: 'png', quality: 0.9, multiplier: 2 });
-            
             const link = document.createElement('a');
-            link.href = data;
-            link.download = 'text-mask-edit.png';
+            // 倍率設為 2 提高清晰度
+            link.href = canvas.toDataURL({ format: 'png', quality: 0.9, multiplier: 2 });
+            link.download = 'TextMask_Edited.png';
             link.click();
         }
+
     </script>
 </body>
 </html>
