@@ -3,39 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Text Mask Tool V7 (Performance)</title>
+    <title>Text Mask Tool V8 (Zoom Support)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;900&display=swap" rel="stylesheet">
     <style>
         body { background-color: #000; color: white; touch-action: none; overflow: hidden; font-family: 'Noto Sans TC', sans-serif; }
-        #canvas-wrapper { position: relative; width: 100vw; height: 60vh; background: #111; display: flex; justify-content: center; align-items: center; }
+        #canvas-wrapper { position: relative; width: 100vw; height: 60vh; background: #111; display: flex; justify-content: center; align-items: center; cursor: crosshair; }
         #loading-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; display: none; flex-direction: column; justify-content: center; align-items: center; }
         .spinner { width: 40px; height: 40px; border: 4px solid #444; border-top: 4px solid #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 15px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .controls { height: 40vh; background: #222; display: flex; flex-direction: column; }
+        .controls { height: 40vh; background: #222; display: flex; flex-direction: column; z-index: 100; }
         .tab-btn { flex: 1; padding: 12px; text-align: center; font-size: 14px; color: #666; border-bottom: 2px solid #333; }
         .tab-btn.active { color: #60a5fa; border-bottom: 2px solid #60a5fa; font-weight: bold; background: #2a2a2a; }
         input[type=range] { -webkit-appearance: none; background: transparent; height: 30px; width: 100%; }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #3b82f6; margin-top: -8px; }
-        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #444; border-radius: 2px; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 22px; width: 22px; border-radius: 50%; background: #3b82f6; margin-top: -8px; border: 2px solid white; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 6px; background: #444; border-radius: 3px; }
     </style>
 </head>
 <body class="flex flex-col h-screen">
 
     <div id="loading-layer">
         <div class="spinner"></div>
-        <div id="loading-text" class="text-gray-300 font-bold text-sm">正在壓縮照片...</div>
+        <div id="loading-text" class="text-gray-300 font-bold">處理中...</div>
     </div>
 
     <div class="flex justify-between items-center px-4 py-3 bg-gray-900 border-b border-gray-800 z-50">
-        <span class="font-bold text-gray-400 text-sm">TEXT MASK V7</span>
+        <span class="font-bold text-blue-400 text-xs tracking-tighter">ZOOM EDITOR V8</span>
         <div class="flex gap-2">
-            <label class="bg-blue-600 px-4 py-1.5 rounded text-xs font-bold cursor-pointer text-white">
+            <label class="bg-blue-600 px-3 py-1.5 rounded text-xs font-bold cursor-pointer text-white active:scale-95">
                 📂 開啟照片
                 <input type="file" id="file-input" accept="image/*" class="hidden">
             </label>
-            <button onclick="saveImage()" class="bg-gray-700 px-4 py-1.5 rounded text-xs font-bold text-white">💾 存圖</button>
+            <button onclick="saveImage()" class="bg-gray-700 px-3 py-1.5 rounded text-xs font-bold text-white active:scale-95">💾 存圖</button>
         </div>
     </div>
 
@@ -45,12 +45,16 @@
 
     <div class="controls">
         <div class="flex">
-            <div id="tab-text" onclick="switchMode('text')" class="tab-btn active">1. 文字編輯</div>
-            <div id="tab-mask" onclick="switchMode('mask')" class="tab-btn">2. 人物遮罩</div>
+            <div id="tab-text" onclick="switchMode('text')" class="tab-btn active">1. 編輯文字</div>
+            <div id="tab-mask" onclick="switchMode('mask')" class="tab-btn">2. 塗抹遮罩</div>
         </div>
+        
         <div id="panel-text" class="flex-1 p-4 space-y-4">
-            <button onclick="addText()" class="w-full bg-gray-700 py-3 rounded text-sm font-bold text-white">+ 新增文字</button>
-            <input type="text" id="val-text" class="w-full bg-gray-800 border border-gray-600 rounded p-2 text-sm text-white text-center" placeholder="輸入文字內容">
+            <div class="flex gap-2">
+                <button onclick="addText()" class="flex-1 bg-gray-700 py-3 rounded text-sm font-bold text-white">+ 新增文字</button>
+                <button onclick="resetZoom()" class="px-4 bg-gray-800 border border-gray-600 rounded text-xs">重設視角</button>
+            </div>
+            <input type="text" id="val-text" class="w-full bg-gray-800 border border-gray-600 rounded p-3 text-sm text-white text-center" placeholder="輸入文字...">
             <div class="flex items-center gap-2">
                 <span class="text-xs text-gray-500">顏色</span>
                 <input type="color" id="val-color" class="w-10 h-10 rounded bg-transparent border-none">
@@ -58,15 +62,17 @@
                 <input type="range" id="val-opacity" min="0" max="1" step="0.1" value="1" class="flex-1">
             </div>
         </div>
+
         <div id="panel-mask" class="hidden flex-1 p-4 flex flex-col items-center">
             <div class="flex gap-3 w-full mb-4 px-2">
                 <button onclick="undoMask()" class="flex-1 bg-gray-700 py-3 rounded text-sm font-bold text-white">↩️ 撤銷</button>
                 <button onclick="resetMask()" class="flex-1 bg-red-900/40 text-red-200 py-3 rounded text-sm font-bold">🗑️ 清除</button>
             </div>
             <div class="w-full px-2">
-                <div class="flex justify-between text-xs text-gray-500 mb-1"><span>筆刷大小</span><span id="brush-size-val">30</span></div>
-                <input type="range" id="val-brush" min="10" max="100" value="30">
+                <div class="flex justify-between text-xs text-gray-500 mb-2"><span>筆刷大小 (放大後建議調小)</span><span id="brush-size-val">30</span></div>
+                <input type="range" id="val-brush" min="5" max="100" value="30">
             </div>
+            <p class="text-[10px] text-gray-500 mt-4">💡 提示：雙指可隨時縮放或平移畫面進行精細塗抹</p>
         </div>
     </div>
 
@@ -76,10 +82,62 @@
 
         window.onload = () => {
             const wrapper = document.getElementById('canvas-wrapper');
-            canvas = new fabric.Canvas('c', { backgroundColor: '#111', width: wrapper.clientWidth, height: wrapper.clientHeight, selection: false });
+            canvas = new fabric.Canvas('c', { 
+                backgroundColor: '#111', 
+                width: wrapper.clientWidth, 
+                height: wrapper.clientHeight, 
+                selection: false,
+                allowTouchScrolling: false // 禁用預設滾動以支援雙指
+            });
+
+            // --- 核心縮放與平移邏輯 ---
+            canvas.on('mouse:wheel', function(opt) {
+                let delta = opt.e.deltaY;
+                let zoom = canvas.getZoom();
+                zoom *= 0.999 ** delta;
+                if (zoom > 20) zoom = 20;
+                if (zoom < 0.01) zoom = 0.01;
+                canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
+                opt.e.preventDefault();
+                opt.e.stopPropagation();
+            });
+
+            // 手機雙指縮放支援
+            let lastV;
+            canvas.on('touch:gesture', function(e) {
+                if (e.e.touches && e.e.touches.length === 2) {
+                    let p1 = { x: e.e.touches[0].pageX, y: e.e.touches[0].pageY };
+                    let p2 = { x: e.e.touches[1].pageX, y: e.e.touches[1].pageY };
+                    let v = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+                    
+                    if (lastV) {
+                        let zoom = canvas.getZoom();
+                        zoom *= v / lastV;
+                        if (zoom > 10) zoom = 10;
+                        if (zoom < 0.1) zoom = 0.1;
+                        let center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 - 50 }; // 補償頂部高度
+                        canvas.zoomToPoint(center, zoom);
+                    }
+                    lastV = v;
+                }
+            });
+
+            canvas.on('touch:drag', function(e) {
+                if (e.e.touches && e.e.touches.length === 2) {
+                    // 雙指平移
+                    let delta = new fabric.Point(e.self.x, e.self.y);
+                    canvas.relativePan(delta);
+                }
+            });
+
+            canvas.on('mouse:up', () => { lastV = undefined; });
         };
 
-        // 核心功能：讀取並強制預壓縮圖片
+        function resetZoom() {
+            canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+        }
+
+        // 圖片處理邏輯 (保持 V7 的高效能縮小)
         document.getElementById('file-input').onchange = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -89,31 +147,19 @@
             reader.onload = (event) => {
                 const img = new Image();
                 img.onload = () => {
-                    // 建立一個隱藏的 Canvas 進行降壓
                     const offscreenCanvas = document.createElement('canvas');
-                    const maxDim = 1500; // 最大邊長限制
-                    let width = img.width;
-                    let height = img.height;
+                    const maxDim = 1500; 
+                    let width = img.width, height = img.height;
+                    if (width > height) { if (width > maxDim) { height *= maxDim / width; width = maxDim; } }
+                    else { if (height > maxDim) { width *= maxDim / height; height = maxDim; } }
+                    offscreenCanvas.width = width; offscreenCanvas.height = height;
+                    offscreenCanvas.getContext('2d').drawImage(img, 0, 0, width, height);
 
-                    if (width > height) {
-                        if (width > maxDim) { height *= maxDim / width; width = maxDim; }
-                    } else {
-                        if (height > maxDim) { width *= maxDim / height; height = maxDim; }
-                    }
-
-                    offscreenCanvas.width = width;
-                    offscreenCanvas.height = height;
-                    const ctx = offscreenCanvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    // 將縮小後的圖片轉回 Fabric
                     fabric.Image.fromURL(offscreenCanvas.toDataURL('image/jpeg', 0.8), (fImg) => {
-                        canvas.clear();
-                        maskPaths = [];
+                        canvas.clear(); resetZoom(); maskPaths = [];
                         const scale = Math.min(canvas.width / fImg.width, canvas.height / fImg.height);
                         fImg.set({ originX: 'center', originY: 'center', left: canvas.width / 2, top: canvas.height / 2, scaleX: scale, scaleY: scale, selectable: false, evented: false });
-                        bgImage = fImg;
-                        canvas.add(bgImage);
+                        bgImage = fImg; canvas.add(bgImage);
 
                         bgImage.clone((cloned) => {
                             topMaskLayer = cloned;
@@ -130,34 +176,31 @@
         };
 
         function addText() {
-            const t = new fabric.IText('點我編輯', { left: canvas.width/2, top: canvas.height/2, originX: 'center', originY: 'center', fontFamily: 'Noto Sans TC', fill: '#ffffff', fontSize: 60, fontWeight: '900' });
+            const t = new fabric.IText('編輯文字', { left: canvas.width/2, top: canvas.height/2, originX: 'center', originY: 'center', fontFamily: 'Noto Sans TC', fill: '#ffffff', fontSize: 60, fontWeight: '900' });
             canvas.add(t);
             canvas.setActiveObject(t);
             if(topMaskLayer) canvas.bringToFront(topMaskLayer);
         }
 
-        // UI 與 遮罩邏輯 (簡化以提升效能)
-        document.getElementById('val-text').oninput = (e) => { const o = canvas.getActiveObject(); if(o && o.type==='i-text'){ o.set('text', e.target.value); canvas.renderAll(); }};
-        document.getElementById('val-color').oninput = (e) => { const o = canvas.getActiveObject(); if(o && o.type==='i-text'){ o.set('fill', e.target.value); canvas.renderAll(); }};
-        document.getElementById('val-opacity').oninput = (e) => { const o = canvas.getActiveObject(); if(o && o.type==='i-text'){ o.set('opacity', parseFloat(e.target.value)); canvas.renderAll(); }};
-        document.getElementById('val-brush').oninput = (e) => { document.getElementById('brush-size-val').innerText = e.target.value; if(canvas.freeDrawingBrush) canvas.freeDrawingBrush.width = parseInt(e.target.value); };
-
+        // 面板與筆刷切換
         function switchMode(mode) {
             isMaskMode = (mode === 'mask');
             document.getElementById('tab-text').className = isMaskMode ? 'tab-btn' : 'tab-btn active';
             document.getElementById('tab-mask').className = isMaskMode ? 'tab-btn active' : 'tab-btn';
             document.getElementById('panel-text').className = isMaskMode ? 'hidden' : 'flex-1 p-4 space-y-4';
             document.getElementById('panel-mask').className = isMaskMode ? 'flex-1 p-4 flex flex-col items-center' : 'hidden';
+            
             canvas.isDrawingMode = isMaskMode;
             if(isMaskMode) {
                 canvas.discardActiveObject().renderAll();
                 const brush = new fabric.PencilBrush(canvas);
-                brush.color = "rgba(255, 50, 50, 0.5)";
+                brush.color = "rgba(255, 50, 50, 0.4)";
                 brush.width = parseInt(document.getElementById('val-brush').value);
                 canvas.freeDrawingBrush = brush;
             }
         }
 
+        // 監聽路徑生成
         setTimeout(() => {
             canvas.on('path:created', (e) => {
                 if (!isMaskMode) return;
@@ -166,17 +209,39 @@
                 path.clone((cloned) => {
                     cloned.set({ stroke: 'black', fill: null, strokeWidth: path.strokeWidth, strokeLineCap: 'round', strokeLineJoin: 'round', left: path.left, top: path.top });
                     maskPaths.push(cloned);
-                    const group = new fabric.Group(maskPaths, { absolutePositioned: true });
-                    topMaskLayer.clipPath = group;
-                    canvas.renderAll();
+                    applyMask();
                 });
             });
-        }, 1000);
+        }, 500);
+
+        function applyMask() {
+            topMaskLayer.clipPath = new fabric.Group(maskPaths, { absolutePositioned: true });
+            canvas.renderAll();
+        }
 
         function undoMask() { if (maskPaths.length > 0) { maskPaths.pop(); applyMask(); } }
         function resetMask() { maskPaths = []; applyMask(); }
-        function applyMask() { topMaskLayer.clipPath = new fabric.Group(maskPaths, { absolutePositioned: true }); canvas.renderAll(); }
-        function saveImage() { canvas.discardActiveObject().renderAll(); const link = document.createElement('a'); link.href = canvas.toDataURL({ format: 'png', multiplier: 2 }); link.download = 'TextBehind.png'; link.click(); }
+        
+        document.getElementById('val-text').oninput = (e) => { const o = canvas.getActiveObject(); if(o && o.type==='i-text'){ o.set('text', e.target.value); canvas.renderAll(); }};
+        document.getElementById('val-color').oninput = (e) => { const o = canvas.getActiveObject(); if(o && o.type==='i-text'){ o.set('fill', e.target.value); canvas.renderAll(); }};
+        document.getElementById('val-opacity').oninput = (e) => { const o = canvas.getActiveObject(); if(o && o.type==='i-text'){ o.set('opacity', parseFloat(e.target.value)); canvas.renderAll(); }};
+        document.getElementById('val-brush').oninput = (e) => { document.getElementById('brush-size-val').innerText = e.target.value; if(canvas.freeDrawingBrush) canvas.freeDrawingBrush.width = parseInt(e.target.value); };
+
+        function saveImage() {
+            // 存圖前重置視角以獲得完整圖片，或直接用原始座標導出
+            const zoom = canvas.getZoom();
+            const vpt = canvas.viewportTransform;
+            canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+            
+            canvas.discardActiveObject().renderAll();
+            const link = document.createElement('a');
+            link.href = canvas.toDataURL({ format: 'png', multiplier: 2 });
+            link.download = 'Text_Behind_Pro.png';
+            link.click();
+            
+            // 恢復原本的視角
+            canvas.setViewportTransform(vpt);
+        }
     </script>
 </body>
 </html>
